@@ -1,0 +1,230 @@
+✅ Use Case Document: Canar – SPA Profile Builder with Subscription & Credit System
+1. Overview
+Canar is a modern Single Page Application (SPA) that allows users to build, manage, and share professional profiles. The platform integrates:
+JWT authentication
+Autosave editing
+Modular component design
+Profile export, sharing, photo & CV upload
+Subscription-based access
+Credit system for profile edits
+2. User Personas
+Persona
+Description
+Visitor/New User
+Unregistered user visiting the platform
+Free User
+Registered but without active subscription
+Subscribed User
+Registered and has an active plan (Basic or Premium)
+3. Subscription & Credit System
+Subscription Plans (Post-Signup)
+Plan
+Price
+Credits Included
+Basic
+₹1,999
+500 credits
+Premium
+₹2,999
+1,000 credits
+Users must purchase a plan to access the Profile Builder.
+Subscription purchase available immediately after sign-up/sign-in.
+Credit Usage Policy
+Every profile edit (autosave, form submission, or section update) deducts 5 credits
+If credits run out, editing is locked until the user:
+Purchases additional credits, or
+Upgrades their plan (if possible)
+Additional Credits (Top-Up)
+Package
+Price
+Credits
+Extra Credits (Top-Up)
+₹500
+100
+Only available to users with an active subscription
+4. Main Features & Functionalities
+4.1 Landing Page
+App logo & description
+“Sign In” / “Sign Up” buttons
+Redirects to authentication pages
+4.2 Authentication
+Sign Up / Sign In with email/password
+JWT-based session
+On success: redirect to Subscription Page
+4.3 Subscription Page (New)
+Display available subscription plans
+Purchase via payment integration (e.g., Razorpay/Stripe)
+On purchase success: credits granted → user redirected to Profile Builder
+Entry Criteria:
+Authenticated user without subscription
+Exit Criteria:
+User purchases a subscription
+4.4 Profile Builder Page
+Section
+Fields
+Personal Info
+Name, email, bio, photo upload, CV upload
+Education
+Degree, university, duration
+Projects
+Project name, description, link, duration
+Skills
+Skill name, proficiency
+Experience
+Role, company, duration, description
+🔄 Autosave Flow with Credit Deduction
+User edits a profile field
+Debounced PATCH request
+Server checks:
+User has an active subscription
+Sufficient credits (≥ 5)
+On success:
+Edit is saved
+5 credits deducted
+"Saved ✓ (Credits left: X)" shown
+On failure:
+Display error: "Insufficient credits. Please top-up or subscribe."
+Disable further editing
+4.5 Credit Management UI
+Show credits remaining on profile page
+Notification when nearing depletion (e.g., <50)
+“Buy Credits” button
+Redirects to credit top-up page
+4.6 Additional Features
+Feature
+Description
+Profile Photo Upload
+Upload and store profile picture
+CV Upload
+Upload resume in PDF/DOC format
+Profile Preview
+View profile in read-only mode
+Profile Edit Mode
+Switch back to editable mode (if credits available)
+Download as PDF
+Export profile to PDF (no credit charge)
+Shareable Profile
+Public profile link (e.g., /profile/share/username)
+5. Data Model (Updated for Subscription & Credits)
+Table
+Key Fields
+users
+id, email, password_hash, created_at
+subscriptions
+user_id, plan_type, credits_allocated, credits_remaining, active, start_date, end_date
+credit_purchases
+user_id, credits, amount, purchase_date
+profiles
+user_id, personal_info, photo_url, cv_url, updated_at
+Other Profile Sections
+education, projects, skills, experience linked by user_id
+6. API Endpoints (Updated)
+Authentication
+POST /auth/signup
+POST /auth/signin
+GET /auth/me
+Subscription
+GET /subscription/plans
+POST /subscription/subscribe
+POST /subscription/credits/topup
+Credit Management
+GET /credits
+PATCH /credits/deduct (on edit)
+Profile & Sections
+GET /profile
+PUT /profile
+PATCH /profile/photo
+PATCH /profile/cv
+GET /profile/pdf
+GET /profile/share/:username
+CRUD for education, project, skill, experience
+7. Component & Module Structure
+Frontend
+Page / Component
+Role
+LandingPage
+Branding + entry point
+SignInPage, SignUpPage
+Authentication flows
+SubscriptionPage
+Choose plan, handle payment
+ProfileBuilderPage
+Editable sections with autosave and credit checks
+CreditTopUpModal
+Buy more credits
+ProfilePreviewPage
+Read-only profile
+Backend
+Routes: /auth, /profile, /subscription, /credits
+Middleware: JWT validation, credit deduction
+Services: Subscription logic, credit usage tracking, payment handling
+8. Detailed User Journey
+Step
+Description
+1. Landing
+User lands → clicks Sign In / Sign Up
+2. Authentication
+User logs in → gets JWT token
+3. Subscription
+User sees available plans → selects and purchases
+4. Profile Builder
+Credits allocated → user begins editing profile
+5. Credit Deduction
+Each autosave costs 5 credits
+6. Credit Depletion
+If credits = 0 → show top-up prompt
+7. Credit Purchase
+User buys 100 credits for ₹500 (if subscribed)
+8. Profile Preview / Share
+User can preview, download, or share profile
+9. Entry & Exit Criteria
+Use Case
+Entry Criteria
+Exit Criteria
+Landing
+Visiting /
+Navigates to auth
+Auth
+Enters valid login/signup
+JWT issued → goes to subscription
+Subscription Page
+No active subscription
+User purchases plan
+Profile Builder
+Active subscription + credits
+Logout or credits = 0
+Credit Top-Up
+Active subscription
+Credits purchased successfully
+10. Summary Table
+Feature
+Stack / Tool
+Notes
+Frontend
+React, TypeScript
+SPA with modular, reusable components
+Styling
+Tailwind CSS
+Consistent, responsive UI
+Backend
+Node.js, Express.js
+REST APIs with subscription logic
+DB
+PostgreSQL
+Normalized tables + credit/subscription tracking
+Auth
+JWT
+Secure session + middleware enforcement
+Payments
+Razorpay/Stripe
+For subscriptions and credit purchases
+Profile Editing
+Credit-based autosave
+5 credits per autosave
+Uploads
+Multer or Cloudinary
+For photo and CV uploads
+Extensions
+PDF Export, Public Share
+Optional, no credit deduction
+

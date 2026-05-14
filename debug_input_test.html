@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Input Test</title>
+    <style>
+        body { margin: 50px; font-family: Arial; }
+        .test-input {
+            width: 300px;
+            height: 40px;
+            padding: 10px;
+            margin: 10px 0;
+            border: 2px solid #333;
+            font-size: 16px;
+            background: white !important;
+            color: black !important;
+            pointer-events: auto !important;
+            user-select: auto !important;
+            z-index: 999999 !important;
+            position: relative !important;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>Input Field Test</h1>
+    
+    <div class="test-section">
+        <h3>Raw HTML Inputs (Should Work)</h3>
+        <input type="email" placeholder="Test Email" class="test-input" id="test-email">
+        <input type="text" placeholder="Test Username" class="test-input" id="test-username">
+        <input type="password" placeholder="Test Password" class="test-input" id="test-password">
+    </div>
+
+    <div class="test-section">
+        <h3>Form Test</h3>
+        <form>
+            <input type="email" name="email" placeholder="Form Email" class="test-input">
+            <input type="text" name="username" placeholder="Form Username" class="test-input">
+            <input type="password" name="password" placeholder="Form Password" class="test-input">
+            <button type="button">Test Button</button>
+        </form>
+    </div>
+
+    <script>
+        // Test if inputs are working
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputs = document.querySelectorAll('.test-input');
+            inputs.forEach((input, index) => {
+                input.addEventListener('focus', function() {
+                    console.log(`Input ${index} focused:`, input.placeholder);
+                });
+                input.addEventListener('input', function() {
+                    console.log(`Input ${index} changed:`, input.value);
+                });
+                input.addEventListener('click', function() {
+                    console.log(`Input ${index} clicked:`, input.placeholder);
+                });
+            });
+            
+            // Force focus test
+            setTimeout(() => {
+                console.log('Testing input focus...');
+                document.getElementById('test-email').focus();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
