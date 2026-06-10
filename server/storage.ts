@@ -44,6 +44,7 @@ const PostgresSessionStore = connectPg(session);
 // Create a separate pool for session store that works with local PostgreSQL
 const sessionPool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
 });
 
 export interface IStorage {
