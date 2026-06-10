@@ -47,6 +47,15 @@ async function ensureRoutes() {
 
 // Vercel serverless handler
 export default async function handler(req: any, res: any) {
-  await ensureRoutes();
-  return app(req, res);
+  try {
+    await ensureRoutes();
+    return app(req, res);
+  } catch (error: any) {
+    console.error("Vercel Fatal Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server initialization failed",
+      error: error.message || String(error)
+    });
+  }
 }

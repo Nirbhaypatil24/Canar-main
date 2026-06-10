@@ -2,11 +2,15 @@ import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "@shared/schema";
 import dotenv from "dotenv";
-import { fileURLToPath } from "url";
-import { dirname, resolve } from "path";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: resolve(__dirname, "../.env") });
+try {
+  // Only attempt to load .env locally. Vercel will inject env vars natively.
+  if (process.env.NODE_ENV !== "production") {
+    dotenv.config();
+  }
+} catch (e) {
+  // Ignore
+}
 
 if (!process.env.DATABASE_URL) {
   throw new Error(

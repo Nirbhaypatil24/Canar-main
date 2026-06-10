@@ -7,12 +7,14 @@ import { setupDatabase, validateDatabase } from "./db-setup";
 import { setupSecurity } from "./security";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
-import { fileURLToPath } from "url";
-import { dirname, resolve } from "path";
-
-// Load environment variables from .env file first
-const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: resolve(__dirname, "../.env") });
+try {
+  // Only attempt to load .env locally. Vercel will inject env vars natively.
+  if (process.env.NODE_ENV !== "production") {
+    dotenv.config();
+  }
+} catch (e) {
+  // Ignore
+}
 
 // ─── Validate Required Secrets in Production ──────────────────────────────────
 if (process.env.NODE_ENV === "production") {
