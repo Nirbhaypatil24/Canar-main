@@ -186,14 +186,73 @@ async function createTables() {
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
+
+  // Create candidates table
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS candidates (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      full_name VARCHAR(255),
+      candidate_email VARCHAR(255),
+      phone VARCHAR(50),
+      location VARCHAR(255),
+      designation VARCHAR(255),
+      summary TEXT,
+      total_experience_years INTEGER,
+      skills JSONB,
+      technologies JSONB,
+      experience JSONB,
+      candidate_education JSONB,
+      candidate_projects JSONB,
+      certifications JSONB,
+      languages JSONB,
+      cv_url TEXT,
+      cv_file_name VARCHAR(255),
+      source VARCHAR(50) DEFAULT 'cv_upload',
+      raw_parsed_data JSONB,
+      search_vector TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
 }
 
 /** Add new columns to existing tables (idempotent) */
 async function runMigrations() {
   console.log("Running column migrations...");
 
+  // Force creation of candidates table if it was missed in earlier setups
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS candidates (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      full_name VARCHAR(255),
+      candidate_email VARCHAR(255),
+      phone VARCHAR(50),
+      location VARCHAR(255),
+      designation VARCHAR(255),
+      summary TEXT,
+      total_experience_years INTEGER,
+      skills JSONB,
+      technologies JSONB,
+      experience JSONB,
+      candidate_education JSONB,
+      candidate_projects JSONB,
+      certifications JSONB,
+      languages JSONB,
+      cv_url TEXT,
+      cv_file_name VARCHAR(255),
+      source VARCHAR(50) DEFAULT 'cv_upload',
+      raw_parsed_data JSONB,
+      search_vector TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
   const migrations = [
-    // Users: security tracking fields
+    // Users: security tracking fields and RBAC
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'candidate' NOT NULL;",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP;",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0;",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP;",

@@ -41,9 +41,10 @@ A comprehensive SaaS application with **Role-Based Access Control**, AI-powered 
 
 ### Database & Performance
 
-- **PostgreSQL**: Robust relational database with Drizzle ORM
+- **Supabase PostgreSQL**: Robust relational database hosted on Supabase with Drizzle ORM
 - **Automated Setup**: Database initialization, migrations, validation on startup
 - **Performance Indexes**: Optimized queries for search and lookups
+- **Vercel Deployment**: Serverless architecture ready using Vercel adapter
 
 ## 🏗️ Architecture Overview
 
@@ -98,7 +99,8 @@ A comprehensive SaaS application with **Role-Based Access Control**, AI-powered 
 ### Prerequisites
 
 - Node.js 18+
-- PostgreSQL 12+
+- A Supabase Project (PostgreSQL 12+)
+- Vercel CLI (Optional, for deployment)
 - npm or yarn
 - A [Groq API key](https://console.groq.com/) (for AI features)
 
@@ -115,8 +117,8 @@ npm install --legacy-peer-deps
 Create a `.env` file in the root directory:
 
 ```bash
-# Database
-DATABASE_URL=postgresql://username:password@localhost:5432/canar_db
+# Database (Supabase)
+DATABASE_URL=postgresql://postgres:[ENCODED_PASSWORD]@[PROJECT_REF].supabase.co:5432/postgres
 
 # Authentication
 AUTH_STRATEGY=hybrid      # session | jwt | hybrid
@@ -242,8 +244,18 @@ node test-navigation-flow.js
 | Basic | ₹1,999/mo | 500 | PDF export, profile sharing, photo upload |
 | Premium | ₹2,999/mo | 1,000 | All Basic + priority support |
 
-## 🚀 AWS Cloud Deployment
+## 🚀 Deployment (Vercel + Supabase)
 
+### 1. Vercel Serverless Architecture
+The app is configured to run on Vercel's serverless edge network:
+- `api/index.ts` adapts the Express app into a Vercel-compatible serverless function.
+- `vercel.json` proxies all `/api/*` requests to the backend while serving the Vite frontend from the edge.
+- `npm run vercel-build` automatically bundles the backend and compiles the frontend.
+
+### 2. Supabase SSL Configuration
+The database pool automatically uses `ssl: { rejectUnauthorized: false }` to securely connect to Supabase's transaction pooler.
+
+### AWS Cloud Deployment (Alternative)
 ```
 ┌──────────┐    ┌──────────┐    ┌──────────┐
 │ Route 53 │───▶│CloudFront│───▶│ S3 Static│
@@ -252,7 +264,7 @@ node test-navigation-flow.js
       │               │
       ▼               ▼
 ┌──────────┐    ┌──────────┐    ┌──────────┐
-│   ALB    │───▶│   RDS    │    │  Redis   │
+│   ALB    │───▶│ Supabase │    │  Redis   │
 │  (LB)   │    │(Postgres)│    │(Cache)   │
 └──────────┘    └──────────┘    └──────────┘
       │
@@ -282,8 +294,8 @@ node test-navigation-flow.js
 | Layer | Technology |
 |-------|------------|
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui |
-| Backend | Node.js, Express, TypeScript |
-| Database | PostgreSQL, Drizzle ORM |
+| Backend | Node.js, Express, TypeScript, Vercel Serverless |
+| Database | Supabase (PostgreSQL), Drizzle ORM |
 | Auth | JWT (jsonwebtoken), Passport.js, scrypt |
 | AI | Groq SDK (LLaMA 3), Zod structured output |
 | PDF | pdf-parse (v1), html2canvas, jsPDF |
