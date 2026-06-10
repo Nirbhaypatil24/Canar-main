@@ -1,72 +1,96 @@
-# Canar SPA Profile Builder - Enhanced Authentication System
+# Canar — AI-Powered Recruitment & Profile Builder Platform
 
-A comprehensive SaaS application for building professional profiles with advanced authentication, subscription management, and multi-tenant architecture.
+A comprehensive SaaS application with **Role-Based Access Control**, AI-powered CV parsing, natural language candidate search, professional profile building, subscription management, and multi-tenant architecture.
 
 ## 🚀 Features
+
+### Role-Based Access Control
+
+- **Two User Roles**: Register as a **Candidate** or a **Recruiter**
+- **Candidate Dashboard**: Upload & parse your CV with AI, build a professional profile, export PDF, share via public link
+- **Recruiter Dashboard**: Search candidates using natural language AI queries across the entire candidate pool
+- **Route Protection**: Frontend and backend enforce role-based access
+
+### AI-Powered Features
+
+- **AI CV Parser** (All Users): Upload a PDF resume → AI (Groq/LLaMA) extracts structured candidate data (name, skills, experience, education, projects, certifications)
+- **AI Candidate Search** (Recruiter Only): Type a natural language query like *"React developer with 3+ years from Pune"* → AI parses intent and matches candidates from the **global** candidate pool
+- **Excel Import**: Bulk import candidates from `.xlsx` spreadsheets
 
 ### Authentication & Security
 
 - **Dual Authentication Modes**: Session-based (development) and JWT (production)
 - **Multi-tenant Architecture**: Complete tenant isolation
-- **Password Security**: bcrypt hashing with salt
-- **Token Management**: Automatic refresh and secure storage
-- **Rate Limiting**: Built-in protection against abuse
+- **Password Security**: scrypt hashing with salt, blocked common passwords, account lockout
+- **Token Management**: Short-lived access tokens (15m) + httpOnly refresh token cookies (7d)
+- **Rate Limiting**: Built-in protection against brute-force attacks
 
-### Subscription Management
+### Subscription & Credits
 
-- **Credit-based System**: Pay-per-edit model
-- **Plan Management**: Basic and Premium plans
-- **Automatic Deduction**: Credits deducted on profile edits
-- **Expiration Handling**: Subscription expiry management
-- **Top-up System**: Additional credit purchases
+- **Credit-based System**: Pay-per-action model (edits, CV parses, searches)
+- **Plan Management**: Basic (₹1,999/mo, 500 credits) and Premium (₹2,999/mo, 1000 credits)
+- **Top-up System**: Purchase additional credits
+- **Expiration Handling**: Automatic subscription expiry management
+
+### Profile Builder (All Users)
+
+- **Section Editor**: Education, experience, projects, skills with autosave
+- **PDF Export**: Generate a professional resume PDF from your profile
+- **Photo & CV Upload**: Attach profile photo and CV documents
+- **Shareable Link**: Public profile page via unique slug
 
 ### Database & Performance
 
-- **PostgreSQL Integration**: Robust relational database
-- **Automated Setup**: Database initialization and validation
-- **Performance Indexes**: Optimized queries
-- **Migration Ready**: Drizzle ORM with schema management
-
-### Client-Side Features
-
-- **Protected Routes**: Authentication and subscription checks
-- **Real-time Updates**: Live credit balance and subscription status
-- **Responsive UI**: Modern, mobile-friendly interface
-- **Error Handling**: Comprehensive error management
+- **PostgreSQL**: Robust relational database with Drizzle ORM
+- **Automated Setup**: Database initialization, migrations, validation on startup
+- **Performance Indexes**: Optimized queries for search and lookups
 
 ## 🏗️ Architecture Overview
 
-### Service-Oriented Design
-
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Auth Service  │    │ Subscription    │    │   Profile       │
-│                 │    │   Service       │    │   Service       │
-│ • Registration  │    │ • Plan Mgmt     │    │ • CRUD Ops      │
-│ • Login/Logout  │    │ • Credit Mgmt   │    │ • File Upload   │
-│ • Token Mgmt    │    │ • Billing       │    │ • PDF Export    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │   PostgreSQL    │
-                    │   Database      │
-                    │                 │
-                    │ • Users         │
-                    │ • Subscriptions │
-                    │ • Profiles      │
-                    │ • Analytics     │
-                    └─────────────────┘
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   Auth Service  │  │  Subscription   │  │   Profile       │  │   AI Service    │
+│                 │  │   Service       │  │   Service       │  │   (Groq LLaMA)  │
+│ • Registration  │  │ • Plan Mgmt     │  │ • CRUD Ops      │  │ • CV Parsing    │
+│ • Login/Logout  │  │ • Credit Mgmt   │  │ • File Upload   │  │ • NL Search     │
+│ • JWT Tokens    │  │ • Billing       │  │ • PDF Export    │  │ • Intent Parse  │
+│ • Role RBAC     │  │ • Top-ups       │  │ • Public Share  │  │ • Excel Import  │
+└────────┬────────┘  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘
+         │                    │                     │                    │
+         └────────────────────┼─────────────────────┼────────────────────┘
+                              │                     │
+                 ┌────────────┴─────────────────────┴──────────┐
+                 │              PostgreSQL Database             │
+                 │                                              │
+                 │  users · subscriptions · profiles · skills   │
+                 │  education · projects · experiences          │
+                 │  candidates · refresh_tokens · purchases     │
+                 └──────────────────────────────────────────────┘
 ```
 
-### Authentication Flow
+### User Flow
 
 ```
-1. User Registration → Password Hashing → User Creation
-2. User Login → Credential Validation → Token/Session Creation
-3. API Requests → Token Validation → Tenant Isolation Check
-4. Protected Operations → Credit Validation → Action Execution
+                  ┌──────────────┐
+                  │   /auth      │
+                  │  Login/Signup │
+                  │  (role pick) │
+                  └──────┬───────┘
+                         │
+              ┌──────────┴──────────┐
+              ▼                     ▼
+     ┌────────────────┐    ┌────────────────┐
+     │   Candidate    │    │   Recruiter    │
+     │                │    │                │
+     │ /candidates    │    │ /candidates    │
+     │ AI CV Parser   │    │ AI CV Parser   │
+     │                │    │ Excel Import   │
+     │ /profile       │    │                │
+     │ Profile Builder│    │ /search        │
+     │ PDF Export     │    │ AI Candidate   │
+     │ Share Link     │    │ Search (NLP)   │
+     │                │    │ (global pool)  │
+     └────────────────┘    └────────────────┘
 ```
 
 ## 🛠️ Installation & Setup
@@ -76,12 +100,13 @@ A comprehensive SaaS application for building professional profiles with advance
 - Node.js 18+
 - PostgreSQL 12+
 - npm or yarn
+- A [Groq API key](https://console.groq.com/) (for AI features)
 
 ### 1. Clone and Install Dependencies
 
 ```bash
 git clone <repository-url>
-cd CPM
+cd Canar-main
 npm install --legacy-peer-deps
 ```
 
@@ -94,14 +119,17 @@ Create a `.env` file in the root directory:
 DATABASE_URL=postgresql://username:password@localhost:5432/canar_db
 
 # Authentication
-AUTH_STRATEGY=hybrid  # session, jwt, or hybrid
+AUTH_STRATEGY=hybrid      # session | jwt | hybrid
 JWT_SECRET=your-super-secure-jwt-secret-key
 JWT_EXPIRES_IN=7d
 SESSION_SECRET=your-session-secret-key
 
+# AI (Groq — powers CV parsing & candidate search)
+GROQ_API_KEY=gsk_your_groq_api_key_here
+
 # Environment
 NODE_ENV=development
-PORT=5000
+PORT=3000
 
 # Security
 CORS_ORIGIN=http://localhost:3000
@@ -117,7 +145,7 @@ npm run dev
 ### 4. Run the Application
 
 ```bash
-# Development mode
+# Development mode (with hot-reload)
 npm run dev
 
 # Production build
@@ -125,228 +153,143 @@ npm run build
 npm start
 ```
 
+## 📊 API Endpoints
+
+### Authentication
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/register` | User registration (accepts `role`: `candidate` or `recruiter`) |
+| `POST` | `/api/login` | User login |
+| `POST` | `/api/logout` | User logout |
+| `GET` | `/api/user` | Get current user (includes `role`) |
+| `POST` | `/api/auth/refresh` | Refresh access token |
+| `GET` | `/api/auth/health` | Auth health check |
+
+### Subscription & Credits
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/subscription/plans` | List available plans |
+| `POST` | `/api/subscription/subscribe` | Create subscription |
+| `GET` | `/api/credits` | Get credit balance |
+| `POST` | `/api/subscription/credits/topup` | Purchase additional credits |
+
+### Profile Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/profile` | Get user profile |
+| `PUT` | `/api/profile` | Update profile (costs 5 credits) |
+| `GET/POST/PUT/DELETE` | `/api/education[/:id]` | Manage education entries |
+| `GET/POST/PUT/DELETE` | `/api/projects[/:id]` | Manage project entries |
+| `GET/POST/PUT/DELETE` | `/api/skills[/:id]` | Manage skill entries |
+| `GET/POST/PUT/DELETE` | `/api/experiences[/:id]` | Manage experience entries |
+
+### AI & Candidate Management (Recruiter Only)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/candidates/parse-cv` | Upload & AI-parse a CV (PDF) |
+| `POST` | `/api/candidates/search` | AI-powered natural language search |
+| `POST` | `/api/candidates/import-excel` | Bulk import from Excel |
+| `GET` | `/api/candidates` | List all candidates |
+| `GET` | `/api/candidates/stats` | Candidate pool statistics |
+| `GET` | `/api/candidates/:id` | Get a single candidate |
+| `DELETE` | `/api/candidates/:id` | Delete a candidate |
+
+## 🔒 Security Features
+
+- ✅ **Password Hashing**: scrypt with random salt
+- ✅ **Blocked Passwords**: Common passwords rejected at registration
+- ✅ **Account Lockout**: 10 failed attempts → 30 minute lockout
+- ✅ **JWT Access Tokens**: 15-minute expiry, signed with HS256
+- ✅ **Refresh Tokens**: Hashed in DB, httpOnly cookie, 7-day expiry
+- ✅ **Tenant Isolation**: Users can only access their own data
+- ✅ **Role-Based Access**: Backend + frontend enforce Candidate vs Recruiter permissions
+- ✅ **Input Validation**: Zod schemas on all endpoints
+- ✅ **CORS Protection**: Configurable origin whitelist
+- ✅ **Rate Limiting**: Request throttling on auth endpoints
+- ✅ **Audit Logging**: Structured JSON logs for all auth events
+
 ## 🧪 Testing
 
-### Run Authentication Tests
-
 ```bash
-# Install test dependencies
-npm install node-fetch --legacy-peer-deps
-
 # Run comprehensive test suite
 node test-auth.js
+
+# Run database integration tests
+node test-db-integration.js
+
+# Run navigation flow tests
+node test-navigation-flow.js
 ```
-
-The test suite validates:
-
-- ✅ User registration and login
-- ✅ JWT/Session authentication
-- ✅ Subscription creation and management
-- ✅ Credit deduction system
-- ✅ Tenant isolation
-- ✅ Protected route access
-- ✅ Database integration
-
-### Test Coverage
-
-- **17 comprehensive tests** covering the entire authentication flow
-- **Database validation** and connection testing
-- **API endpoint testing** with proper error handling
-- **Security validation** including tenant isolation
-- **Subscription logic** testing with credit management
 
 ## 🔧 Configuration Options
 
 ### Authentication Strategies
 
-#### Session-Based (Development)
-
-```bash
-AUTH_STRATEGY=session
-```
-
-- Simple to debug
-- Built-in CSRF protection
-- No client-side token management
-
-#### JWT-Based (Production)
-
-```bash
-AUTH_STRATEGY=jwt
-```
-
-- Stateless and scalable
-- Works with microservices
-- Requires proper token management
-
-#### Hybrid (Recommended)
-
-```bash
-AUTH_STRATEGY=hybrid
-```
-
-- Best of both worlds
-- Session for development, JWT for production
-- Flexible deployment options
+| Strategy | Best For | Notes |
+|----------|----------|-------|
+| `session` | Development | Simple debugging, built-in CSRF |
+| `jwt` | Production | Stateless, scalable, microservice-friendly |
+| `hybrid` | Recommended | Session in dev, JWT in prod |
 
 ### Subscription Plans
 
-#### Basic Plan
-
-- **Price**: ₹1,999/month
-- **Credits**: 500 editing credits
-- **Features**: PDF export, profile sharing, photo upload
-
-#### Premium Plan
-
-- **Price**: ₹2,999/month
-- **Credits**: 1,000 editing credits
-- **Features**: All Basic features + priority support
-
-## 📊 API Endpoints
-
-### Authentication
-
-```
-POST /api/register          # User registration
-POST /api/login            # User login
-POST /api/logout           # User logout
-GET  /api/user             # Get current user
-GET  /api/auth/health      # Health check
-```
-
-### Subscription
-
-```
-GET  /api/subscription/plans     # Get available plans
-POST /api/subscription/subscribe # Create subscription
-GET  /api/credits               # Get credit status
-POST /api/subscription/credits/topup # Add credits
-```
-
-### Profile Management
-
-```
-GET  /api/profile              # Get user profile
-PUT  /api/profile              # Update profile (5 credits)
-GET  /api/education            # Get education
-POST /api/education            # Add education (5 credits)
-PUT  /api/education/:id        # Update education (5 credits)
-DELETE /api/education/:id      # Delete education
-```
-
-## 🔒 Security Features
-
-### Implemented Security Measures
-
-- ✅ **Password Hashing**: bcrypt with salt
-- ✅ **JWT Token Validation**: Secure token verification
-- ✅ **Tenant Isolation**: User data separation
-- ✅ **Input Validation**: Zod schema validation
-- ✅ **CORS Protection**: Cross-origin request handling
-- ✅ **Rate Limiting**: Basic request throttling
-
-### Security Best Practices
-
-- **Token Storage**: httpOnly cookies for refresh tokens
-- **Password Policy**: Strong password requirements
-- **Session Management**: Secure session configuration
-- **Error Handling**: No sensitive data in error messages
-- **Database Security**: Prepared statements and validation
+| Plan | Price | Credits | Features |
+|------|-------|---------|----------|
+| Basic | ₹1,999/mo | 500 | PDF export, profile sharing, photo upload |
+| Premium | ₹2,999/mo | 1,000 | All Basic + priority support |
 
 ## 🚀 AWS Cloud Deployment
 
-### Quick Deployment
-
-```bash
-# Set environment variables
-export DB_PASSWORD="your-secure-password"
-export AWS_REGION="us-east-1"
-
-# Run automated deployment
-chmod +x deploy.sh
-./deploy.sh
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐
+│ Route 53 │───▶│CloudFront│───▶│ S3 Static│
+│  (DNS)   │    │  (CDN)   │    │(Frontend)│
+└──────────┘    └──────────┘    └──────────┘
+      │               │
+      ▼               ▼
+┌──────────┐    ┌──────────┐    ┌──────────┐
+│   ALB    │───▶│   RDS    │    │  Redis   │
+│  (LB)   │    │(Postgres)│    │(Cache)   │
+└──────────┘    └──────────┘    └──────────┘
+      │
+      ▼
+┌──────────┐
+│  ECS     │
+│ Fargate  │
+│(Backend) │
+└──────────┘
 ```
 
-### AWS Architecture
+### Estimated Monthly Costs: $126–265
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Route 53      │    │   CloudFront    │    │   S3 Static     │
-│   (DNS)         │────│   (CDN)         │────│   (Frontend)    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Application   │    │   RDS           │    │   ElastiCache   │
-│   Load Balancer │────│   PostgreSQL    │────│   Redis         │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│   ECS Fargate   │
-│   (Backend)     │
-└─────────────────┘
-```
+| Service | Cost |
+|---------|------|
+| ECS Fargate | $50–100 |
+| RDS PostgreSQL | $30–60 |
+| ElastiCache Redis | $15–30 |
+| ALB | $20–40 |
+| CloudFront | $5–15 |
+| Route 53 | $0.50 |
+| S3 | $1–5 |
+| CloudWatch | $5–15 |
 
-### Production Features
+## 📚 Tech Stack
 
-- ✅ **Multi-AZ Deployment**: High availability across availability zones
-- ✅ **Auto-scaling**: ECS services scale based on demand
-- ✅ **Load Balancing**: Application Load Balancer with health checks
-- ✅ **Database**: RDS PostgreSQL with automated backups
-- ✅ **Caching**: ElastiCache Redis for performance
-- ✅ **CDN**: CloudFront for global content delivery
-- ✅ **SSL/TLS**: HTTPS encryption with ACM certificates
-- ✅ **Monitoring**: CloudWatch metrics and logging
-- ✅ **CI/CD**: Automated deployment pipeline
-
-### Estimated Monthly Costs: $126-265
-
-- ECS Fargate: $50-100
-- RDS PostgreSQL: $30-60
-- ElastiCache Redis: $15-30
-- Application Load Balancer: $20-40
-- CloudFront: $5-15
-- Route 53: $0.50
-- S3: $1-5
-- CloudWatch: $5-15
-
-## 📈 Performance Optimization
-
-### Database Optimization
-
-- **Indexes**: Optimized for common queries
-- **Connection Pooling**: Efficient database connections
-- **Query Optimization**: Selective field loading
-- **Caching**: Redis integration for frequently accessed data
-
-### API Optimization
-
-- **Response Caching**: Cache static data
-- **Pagination**: Large dataset handling
-- **Compression**: Gzip response compression
-- **CDN Integration**: Static asset delivery
-
-## 🔍 Monitoring & Observability
-
-### Metrics to Track
-
-- **Authentication**: Login success/failure rates
-- **Subscription**: Plan conversion rates
-- **Performance**: API response times
-- **Security**: Failed authentication attempts
-
-### Logging
-
-- **Structured Logging**: JSON format for easy parsing
-- **Error Tracking**: Comprehensive error logging
-- **Audit Trail**: User action logging
-- **Performance Monitoring**: Query and response time tracking
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui |
+| Backend | Node.js, Express, TypeScript |
+| Database | PostgreSQL, Drizzle ORM |
+| Auth | JWT (jsonwebtoken), Passport.js, scrypt |
+| AI | Groq SDK (LLaMA 3), Zod structured output |
+| PDF | pdf-parse (v1), html2canvas, jsPDF |
+| File Upload | Multer |
 
 ## 🤝 Contributing
-
-### Development Workflow
 
 1. Fork the repository
 2. Create a feature branch
@@ -354,47 +297,10 @@ chmod +x deploy.sh
 4. Run tests: `node test-auth.js`
 5. Submit a pull request
 
-### Code Standards
-
-- **TypeScript**: Strict type checking
-- **ESLint**: Code quality enforcement
-- **Prettier**: Code formatting
-- **Testing**: Comprehensive test coverage
-
-## 📚 Documentation
-
-### Additional Resources
-
-- [Technical Implementation](./TECHNICAL_IMPLEMENTATION.md) - Detailed implementation analysis
-- [AWS Deployment Guide](./AWS_DEPLOYMENT.md) - Complete deployment instructions
-
-### Architecture Decisions
-
-- **JWT vs Sessions**: Hybrid approach for flexibility
-- **Database Design**: Optimized for multi-tenancy
-- **Service Architecture**: Modular and scalable design
-- **Security Model**: Defense in depth approach
-
-## 🆘 Support
-
-### Common Issues
-
-1. **Database Connection**: Check DATABASE_URL and PostgreSQL service
-2. **Authentication Errors**: Verify JWT_SECRET and session configuration
-3. **Credit Deduction**: Ensure subscription is active and credits available
-4. **CORS Issues**: Configure CORS_ORIGIN for your domain
-
-### Getting Help
-
-- Check the [Technical Implementation](./TECHNICAL_IMPLEMENTATION.md) for detailed explanations
-- Run the test suite to validate your setup
-- Review the API documentation for endpoint details
-- Check the logs for detailed error information
-
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ---
 
-**Built with ❤️ for secure, scalable SaaS applications**
+**Built with ❤️ for secure, scalable SaaS recruitment**

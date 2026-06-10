@@ -5,9 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useSubscription } from "@/hooks/use-auth";
+import { useSubscription, useAuth } from "@/hooks/use-auth";
 
 interface Plan {
   id: string;
@@ -21,6 +21,7 @@ export default function SubscriptionPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { hasActiveSubscription } = useSubscription();
+  const { logoutMutation } = useAuth();
 
   // Redirect to profile page if user already has an active subscription
   useEffect(() => {
@@ -80,6 +81,22 @@ export default function SubscriptionPage() {
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">Choose Your Plan</h2>
           <p className="mt-4 text-lg text-gray-600">Select a subscription to start building your professional profile</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              logoutMutation.mutate(undefined, {
+                onSuccess: () => {
+                  window.location.href = "/";
+                }
+              });
+            }}
+            disabled={logoutMutation.isPending}
+            className="mt-4 flex items-center gap-2 mx-auto text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+          >
+            <LogOut className="h-4 w-4" />
+            {logoutMutation.isPending ? "Logging out..." : "Logout"}
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-2 max-w-4xl mx-auto">

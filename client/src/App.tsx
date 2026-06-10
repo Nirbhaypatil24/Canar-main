@@ -13,6 +13,8 @@ import SubscriptionPage from "@/pages/subscription-page"
 import ProfileBuilderPage from "@/pages/profile-builder-page"
 import SimpleFormTest from "@/pages/simple-form-test"
 import PublicProfilePage from "@/pages/public-profile-page"
+import CvParserPage from "@/pages/cv-parser-page"
+import CandidateSearchPage from "@/pages/candidate-search-page"
 
 function Router() {
   return (
@@ -24,6 +26,8 @@ function Router() {
       <Route path="/profile/share/:shareSlug" component={PublicProfilePage} />
       <ProtectedRoute path="/subscription" component={SubscriptionPage} />
       <ProtectedRoute path="/profile" component={ProfileBuilderPage} requireSubscription={true} />
+      <ProtectedRoute path="/candidates" component={CvParserPage} requireSubscription={true} />
+      <ProtectedRoute path="/search" component={CandidateSearchPage} requireSubscription={true} requireRole="recruiter" />
       <Route component={NotFound} />
     </Switch>
   )
@@ -43,3 +47,4 @@ function App() {
 }
 
 export default App
+

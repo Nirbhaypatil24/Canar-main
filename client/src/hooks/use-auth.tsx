@@ -4,8 +4,15 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/schema";
-import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
+import { User as SelectUser, InsertUser } from "@shared/schema";
+import {
+  getQueryFn,
+  apiRequest,
+  queryClient,
+  setAccessToken,
+  getAccessToken,
+  initCsrfToken,
+} from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 type AuthContextType = {
@@ -15,12 +22,11 @@ type AuthContextType = {
   isAuthenticated: boolean;
   loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
-  token: string | null;
-  setToken: (token: string | null) => void;
+  registerMutation: UseMutationResult<SelectUser, Error, RegisterData>;
 };
 
-type LoginData = Pick<InsertUser, "username" | "password">;
+type LoginData = { username: string; password: string };
+type RegisterData = { email: string; username?: string; password: string; role?: 'candidate' | 'recruiter' };
 
 interface AuthResponse {
   success: boolean;
@@ -40,37 +46,52 @@ interface SubscriptionStatus {
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
-  const [token, setToken] = useState<string | null>(() => {
-    // Initialize token from localStorage
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('auth_token');
-    }
-    return null;
-  });
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Update localStorage when token changes
+  // Initialize CSRF token and attempt silent refresh on app load
   useEffect(() => {
-    if (token) {
-      localStorage.setItem('auth_token', token);
-    } else {
-      localStorage.removeItem('auth_token');
-    }
-  }, [token]);
+    const init = async () => {
+      // Fetch CSRF token for mutation requests
+      await initCsrfToken();
 
+      // Try to restore session via refresh token (httpOnly cookie)
+      try {
+        const res = await fetch("/api/auth/refresh", {
+          method: "POST",
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.success && data.token) {
+            setAccessToken(data.token);
+          }
+        }
+      } catch {
+        // Silent fail — user needs to login
+      }
+
+      setIsInitialized(true);
+    };
+
+    init();
+  }, []);
+
+  // Query current user — works for both session (cookie) and JWT (token in memory)
   const {
-    data: user,
+    data: userData,
     error,
-    isLoading,
-    refetch,
-  } = useQuery<SelectUser | undefined, Error>({
+    isLoading: isQueryLoading,
+  } = useQuery<{ success: boolean; user: SelectUser } | null, Error>({
     queryKey: ["/api/user"],
-    queryFn: getQueryFn({
-      on401: "returnNull"
-    }),
-    enabled: true, // Always enable the query to check authentication status
+    queryFn: getQueryFn({ on401: "returnNull" }),
+    enabled: isInitialized, // Only run after init completes
   });
+
+  const user = userData?.user ?? null;
+  const isLoading = !isInitialized || isQueryLoading;
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
@@ -80,16 +101,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(data.message || "Login failed");
       }
 
-      // Store token if provided (JWT mode)
+      // Store access token in memory (refresh token is in httpOnly cookie)
       if (data.token) {
-        setToken(data.token);
+        setAccessToken(data.token);
       }
 
       return data.user;
     },
     onSuccess: (user: SelectUser) => {
-      // Set the user data directly in the cache
-      queryClient.setQueryData(["/api/user"], user);
+      // Invalidate and refetch user data
+      queryClient.setQueryData(["/api/user"], { success: true, user });
 
       toast({
         title: "Login successful",
@@ -106,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const registerMutation = useMutation({
-    mutationFn: async (credentials: InsertUser) => {
+    mutationFn: async (credentials: RegisterData) => {
       const res = await apiRequest("POST", "/api/register", credentials);
       const data: AuthResponse = await res.json();
 
@@ -114,16 +135,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(data.message || "Registration failed");
       }
 
-      // Store token if provided (JWT mode)
       if (data.token) {
-        setToken(data.token);
+        setAccessToken(data.token);
       }
 
       return data.user;
     },
     onSuccess: (user: SelectUser) => {
-      // Set the user data directly in the cache
-      queryClient.setQueryData(["/api/user"], user);
+      queryClient.setQueryData(["/api/user"], { success: true, user });
 
       toast({
         title: "Registration successful",
@@ -144,10 +163,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiRequest("POST", "/api/logout");
     },
     onSuccess: () => {
-      // Clear token and user data
-      setToken(null);
+      setAccessToken(null);
       queryClient.setQueryData(["/api/user"], null);
-      queryClient.clear(); // Clear all cached data
+      queryClient.clear();
 
       toast({
         title: "Logout successful",
@@ -155,8 +173,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     },
     onError: (error: Error) => {
-      // Even if logout fails, clear local data
-      setToken(null);
+      // Even if logout fails server-side, clear local state
+      setAccessToken(null);
       queryClient.setQueryData(["/api/user"], null);
 
       toast({
@@ -167,48 +185,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  // Check authentication status
   const isAuthenticated = !!user;
-  // Auto-refresh token if needed (for JWT mode)
-  useEffect(() => {
-    if (token && user) {
-      // In a real implementation, you might want to check token expiry
-      // and refresh it before it expires
-      const checkTokenExpiry = () => {
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          const expiryTime = payload.exp * 1000; // Convert to milliseconds
-          const currentTime = Date.now();
-
-          // If token expires in less than 5 minutes, refresh it
-          if (expiryTime - currentTime < 5 * 60 * 1000) {
-            // Implement token refresh logic here
-            console.log("Token expiring soon, should refresh");
-          }
-        } catch (error) {
-          console.error("Error parsing token:", error);
-        }
-      };
-
-      checkTokenExpiry();
-      const interval = setInterval(checkTokenExpiry, 60000); // Check every minute
-
-      return () => clearInterval(interval);
-    }
-  }, [token, user]);
 
   return (
     <AuthContext.Provider
       value={{
-        user: user ?? null,
+        user,
         isLoading,
         error,
         isAuthenticated,
         loginMutation,
         logoutMutation,
         registerMutation,
-        token,
-        setToken,
       }}
     >
       {children}
@@ -224,21 +212,23 @@ export function useAuth() {
   return context;
 }
 
-// Hook for checking if user has required subscription
+// Hook for checking subscription status
 export function useSubscription() {
   const { isAuthenticated } = useAuth();
-  const { data: subscriptionStatus } = useQuery<SubscriptionStatus>({
+  const { data: subscriptionData } = useQuery<{
+    success: boolean;
+  } & SubscriptionStatus>({
     queryKey: ["/api/credits"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: isAuthenticated,
   });
 
   return {
-    hasActiveSubscription: subscriptionStatus?.hasActiveSubscription || false,
-    creditsRemaining: subscriptionStatus?.creditsRemaining || 0,
-    planType: subscriptionStatus?.planType || null,
-    canEdit: subscriptionStatus?.canEdit || false,
-    isExpired: subscriptionStatus?.isExpired || false,
-    daysUntilExpiry: subscriptionStatus?.daysUntilExpiry || null,
+    hasActiveSubscription: subscriptionData?.hasActiveSubscription || false,
+    creditsRemaining: subscriptionData?.creditsRemaining || 0,
+    planType: subscriptionData?.planType || null,
+    canEdit: subscriptionData?.canEdit || false,
+    isExpired: subscriptionData?.isExpired || false,
+    daysUntilExpiry: subscriptionData?.daysUntilExpiry || null,
   };
 }

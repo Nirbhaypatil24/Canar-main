@@ -2,7 +2,7 @@ import type { Express } from "express";
 import express from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, requireAuth, requireTenantAccess } from "./auth";
+import { setupAuth, requireAuth, requireTenantAccess, requireOwnership } from "./auth";
 import { SubscriptionService } from "./subscription-service";
 import { S3Service } from "./s3-service";
 import {
@@ -18,48 +18,12 @@ import { randomBytes } from "crypto";
 import fs from "fs";
 import multer from "multer";
 
-function requireAuthLocal(req: any, res: any, next: any) {
-  console.log("Auth check - isAuthenticated:", req.isAuthenticated());
-  console.log("Auth check - user exists:", !!req.user);
-  console.log("Auth check - session:", req.session?.passport);
-
-  if (!req.isAuthenticated() || !req.user) {
-    return res.sendStatus(401);
-  }
-  next();
-}
-
-async function requireCredits(req: any, res: any, next: any) {
-  if (!req.user) {
-    return res.sendStatus(401);
-  }
-
-  const userId = req.user.id;
-  const subscription = await storage.getUserSubscription(userId);
-
-  if (!subscription || !subscription.active) {
-    return res.status(403).json({ message: "Active subscription required" });
-  }
-
-  if (subscription.creditsRemaining < 5) {
-    return res.status(403).json({
-      message: "Insufficient credits. Please top-up or upgrade your plan.",
-    });
-  }
-
-  req.subscription = subscription;
-  next();
-}
-
-// Helper function to get user ID with fallback for development
+// Get authenticated user ID — NEVER falls back to a bypass value
 function getUserId(req: any): string {
-  // In development/bypass mode, use hardcoded ID if no authenticated user
-  if (req.user?.id) {
-    return req.user.id;
+  if (!req.user?.id) {
+    throw new Error("Authentication required — no user on request");
   }
-
-  // For bypass mode, use UUID format for user ID
-  return "00000000-0000-0000-0000-000000000001";
+  return req.user.id;
 }
 
 // Helper function to safely get error message
@@ -159,7 +123,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  app.post("/api/subscription/credits/topup", async (req, res) => {
+  app.post("/api/subscription/credits/topup", requireAuth, requireTenantAccess, async (req, res) => {
     try {
       const { credits, amount } = req.body;
 
@@ -372,7 +336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Education routes
-  app.get("/api/education", async (req, res) => {
+  app.get("/api/education", requireAuth, async (req, res) => {
     try {
       const userId = getUserId(req);
       const education = await storage.getUserEducation(userId);
@@ -530,9 +494,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/education/:id", async (req, res) => {
+  app.delete("/api/education/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      const userId = getUserId(req);
+
+      // Verify ownership before deleting
+      const ownerId = await storage.getEducationOwner(id);
+      if (!ownerId) {
+        return res.status(404).json({
+          success: false,
+          message: "Education record not found",
+        });
+      }
+      if (ownerId !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied: you do not own this resource",
+        });
+      }
+
       await storage.deleteEducation(id);
       res.json({
         success: true,
@@ -552,7 +533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project routes
-  app.get("/api/projects", async (req, res) => {
+  app.get("/api/projects", requireAuth, async (req, res) => {
     try {
       const userId = getUserId(req);
       const projects = await storage.getUserProjects(userId);
@@ -707,9 +688,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/projects/:id", async (req, res) => {
+  app.delete("/api/projects/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      const userId = getUserId(req);
+
+      // Verify ownership before deleting
+      const ownerId = await storage.getProjectOwner(id);
+      if (!ownerId) {
+        return res.status(404).json({
+          success: false,
+          message: "Project not found",
+        });
+      }
+      if (ownerId !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied: you do not own this resource",
+        });
+      }
+
       await storage.deleteProject(id);
       res.json({
         success: true,
@@ -729,7 +727,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Skill routes
-  app.get("/api/skills", async (req, res) => {
+  app.get("/api/skills", requireAuth, async (req, res) => {
     try {
       const userId = getUserId(req);
       const skills = await storage.getUserSkills(userId);
@@ -884,9 +882,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/skills/:id", async (req, res) => {
+  app.delete("/api/skills/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      const userId = getUserId(req);
+
+      // Verify ownership before deleting
+      const ownerId = await storage.getSkillOwner(id);
+      if (!ownerId) {
+        return res.status(404).json({
+          success: false,
+          message: "Skill not found",
+        });
+      }
+      if (ownerId !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied: you do not own this resource",
+        });
+      }
+
       await storage.deleteSkill(id);
       res.json({
         success: true,
@@ -906,7 +921,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Experience routes
-  app.get("/api/experiences", async (req, res) => {
+  app.get("/api/experiences", requireAuth, async (req, res) => {
     try {
       const userId = getUserId(req);
       const experiences = await storage.getUserExperiences(userId);
@@ -1064,9 +1079,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/experiences/:id", async (req, res) => {
+  app.delete("/api/experiences/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      const userId = getUserId(req);
+
+      // Verify ownership before deleting
+      const ownerId = await storage.getExperienceOwner(id);
+      if (!ownerId) {
+        return res.status(404).json({
+          success: false,
+          message: "Experience not found",
+        });
+      }
+      if (ownerId !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied: you do not own this resource",
+        });
+      }
+
       await storage.deleteExperience(id);
       res.json({
         success: true,
@@ -1353,6 +1385,389 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Serve uploaded files (fallback for local storage)
   app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
+  // ─── Candidate / AI Routes ──────────────────────────────────────────────────
+  // IMPORTANT: Specific paths MUST come before /:id wildcard routes
+
+  // Candidate stats (must be before /:id)
+  app.get("/api/candidates/stats", requireAuth, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const stats = await storage.getCandidateStats(userId);
+      res.json({
+        success: true,
+        stats,
+      });
+    } catch (error) {
+      console.error("Error fetching candidate stats:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching stats",
+      });
+    }
+  });
+
+  // Parse CV with AI (must be before /:id)
+  app.post(
+    "/api/candidates/parse-cv",
+    requireAuth,
+    upload.single("cv"),
+    async (req, res) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({
+            success: false,
+            message: "No CV file uploaded",
+          });
+        }
+
+        const userId = getUserId(req);
+
+        // Check credits (10 per parse)
+        const subscription = await storage.getUserSubscription(userId);
+        if (!subscription || !subscription.active) {
+          return res.status(403).json({
+            success: false,
+            message: "Active subscription required to parse CVs",
+          });
+        }
+        if (subscription.creditsRemaining < 10) {
+          return res.status(403).json({
+            success: false,
+            message:
+              "Insufficient credits. CV parsing requires 10 credits.",
+          });
+        }
+
+        // Dynamic imports for AI services
+        const { extractTextFromPdf } = await import("./pdf-parser");
+        const { parseCvWithAI, buildSearchVector } = await import("./ai-service");
+
+        // Extract text from PDF
+        const pdfResult = await extractTextFromPdf(req.file.buffer);
+
+        // Parse with AI
+        const parsedData = await parseCvWithAI(pdfResult.text);
+
+        // Upload CV to storage (S3 or local)
+        let cvUrl: string | null = null;
+        if (S3Service.isConfigured()) {
+          const uploadResult = await S3Service.uploadFile(req.file, "cv");
+          cvUrl = uploadResult.fileUrl;
+        } else {
+          const uploadDir = path.join(process.cwd(), "uploads");
+          if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+          }
+          const uniqueSuffix =
+            Date.now() + "-" + Math.round(Math.random() * 1e9);
+          const fileName = `cv-${uniqueSuffix}${path.extname(
+            req.file.originalname
+          )}`;
+          const filePath = path.join(uploadDir, fileName);
+          fs.writeFileSync(filePath, req.file.buffer);
+          cvUrl = `/uploads/${fileName}`;
+        }
+
+        // Save candidate to database
+        const candidate = await storage.createCandidate({
+          userId,
+          fullName: parsedData.fullName,
+          email: parsedData.email,
+          phone: parsedData.phone,
+          location: parsedData.location,
+          designation: parsedData.designation,
+          summary: parsedData.summary,
+          totalExperienceYears: parsedData.totalExperienceYears,
+          skills: parsedData.skills.length > 0 ? parsedData.skills : null,
+          technologies:
+            parsedData.technologies.length > 0
+              ? parsedData.technologies
+              : null,
+          experience:
+            parsedData.experience.length > 0 ? parsedData.experience : null,
+          education:
+            parsedData.education.length > 0 ? parsedData.education : null,
+          projects:
+            parsedData.projects.length > 0 ? parsedData.projects : null,
+          certifications:
+            parsedData.certifications.length > 0
+              ? parsedData.certifications
+              : null,
+          languages:
+            parsedData.languages.length > 0 ? parsedData.languages : null,
+          cvUrl,
+          cvFileName: req.file.originalname,
+          source: "cv_upload",
+          rawParsedData: parsedData as any,
+          searchVector: buildSearchVector(parsedData),
+        });
+
+        // Deduct credits
+        const updatedSubscription =
+          await storage.updateSubscriptionCredits(userId, 10);
+
+        res.json({
+          success: true,
+          candidate,
+          parsedData,
+          message: "CV parsed and candidate saved successfully",
+          creditsRemaining: updatedSubscription?.creditsRemaining,
+        });
+      } catch (error) {
+        console.error("Error parsing CV:", error);
+        res.status(500).json({
+          success: false,
+          message: getErrorMessage(error) || "Error parsing CV",
+        });
+      }
+    }
+  );
+
+  // AI-powered candidate search (must be before /:id)
+  app.post("/api/candidates/search", requireAuth, async (req, res) => {
+    try {
+      if ((req.user as any).role !== "recruiter") {
+        return res.status(403).json({
+          success: false,
+          message: "Only recruiters can perform AI candidate searches",
+        });
+      }
+
+      const { query } = req.body;
+
+      if (!query || typeof query !== "string" || query.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Search query is required",
+        });
+      }
+
+      const userId = getUserId(req);
+
+      // Check credits (2 per search)
+      const subscription = await storage.getUserSubscription(userId);
+      if (!subscription || !subscription.active) {
+        return res.status(403).json({
+          success: false,
+          message: "Active subscription required to search candidates",
+        });
+      }
+      if (subscription.creditsRemaining < 2) {
+        return res.status(403).json({
+          success: false,
+          message: "Insufficient credits. AI search requires 2 credits.",
+        });
+      }
+
+      // Extract search intent from natural language query
+      const { extractSearchIntent } = await import("./ai-service");
+      const searchIntent = await extractSearchIntent(query.trim());
+
+      // Search candidates using extracted intent
+      const candidates = await storage.searchCandidates(userId, {
+        skills: searchIntent.skills,
+        technologies: searchIntent.technologies,
+        minExperienceYears: searchIntent.minExperienceYears,
+        maxExperienceYears: searchIntent.maxExperienceYears,
+        location: searchIntent.location,
+        designation: searchIntent.designation,
+        keywords: searchIntent.keywords,
+      });
+
+      // Deduct credits
+      const updatedSubscription =
+        await storage.updateSubscriptionCredits(userId, 2);
+
+      res.json({
+        success: true,
+        candidates,
+        searchIntent,
+        total: candidates.length,
+        creditsRemaining: updatedSubscription?.creditsRemaining,
+      });
+    } catch (error) {
+      console.error("Error searching candidates:", error);
+      res.status(500).json({
+        success: false,
+        message: getErrorMessage(error) || "Error searching candidates",
+      });
+    }
+  });
+
+  // Excel import (must be before /:id)
+  app.post(
+    "/api/candidates/import-excel",
+    requireAuth,
+    upload.single("file"),
+    async (req, res) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({
+            success: false,
+            message: "No file uploaded",
+          });
+        }
+
+        const userId = getUserId(req);
+
+        // Check subscription
+        const subscription = await storage.getUserSubscription(userId);
+        if (!subscription || !subscription.active) {
+          return res.status(403).json({
+            success: false,
+            message: "Active subscription required to import candidates",
+          });
+        }
+
+        const { parseExcelBuffer, excelRowToCandidateData } = await import(
+          "./excel-import"
+        );
+
+        // Parse Excel file
+        const { rows, errors } = parseExcelBuffer(
+          req.file.buffer,
+          req.file.originalname
+        );
+
+        // Check credits (1 per row)
+        const creditsNeeded = rows.length;
+        if (subscription.creditsRemaining < creditsNeeded) {
+          return res.status(403).json({
+            success: false,
+            message: `Insufficient credits. Importing ${rows.length} candidates requires ${creditsNeeded} credits. You have ${subscription.creditsRemaining}.`,
+          });
+        }
+
+        // Convert rows to candidate data
+        const candidateDataList = rows.map((row) =>
+          excelRowToCandidateData(row, userId)
+        );
+
+        // Bulk insert
+        const imported = await storage.bulkCreateCandidates(
+          candidateDataList as any[]
+        );
+
+        // Deduct credits
+        if (imported > 0) {
+          await storage.updateSubscriptionCredits(userId, imported);
+        }
+
+        const updatedSubscription =
+          await storage.getUserSubscription(userId);
+
+        res.json({
+          success: true,
+          imported,
+          errors,
+          total: rows.length + errors.length,
+          message: `Successfully imported ${imported} candidates`,
+          creditsRemaining: updatedSubscription?.creditsRemaining,
+        });
+      } catch (error) {
+        console.error("Error importing Excel:", error);
+        res.status(500).json({
+          success: false,
+          message: getErrorMessage(error) || "Error importing candidates",
+        });
+      }
+    }
+  );
+
+  // List candidates (paginated)
+  app.get("/api/candidates", requireAuth, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const candidates = await storage.getCandidatesByUser(
+        userId,
+        limit,
+        offset
+      );
+      const total = await storage.getCandidateCount(userId);
+
+      res.json({
+        success: true,
+        candidates,
+        total,
+        limit,
+        offset,
+      });
+    } catch (error) {
+      console.error("Error fetching candidates:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching candidates",
+      });
+    }
+  });
+
+  // Get single candidate (wildcard /:id — MUST be after all specific paths)
+  app.get("/api/candidates/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const candidate = await storage.getCandidateById(
+        req.params.id,
+        userId
+      );
+
+      if (!candidate) {
+        return res.status(404).json({
+          success: false,
+          message: "Candidate not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        candidate,
+      });
+    } catch (error) {
+      console.error("Error fetching candidate:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching candidate",
+      });
+    }
+  });
+
+  // Delete candidate (wildcard /:id — MUST be after all specific paths)
+  app.delete("/api/candidates/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const ownerId = await storage.getCandidateOwner(req.params.id);
+
+      if (!ownerId) {
+        return res.status(404).json({
+          success: false,
+          message: "Candidate not found",
+        });
+      }
+      if (ownerId.toString() !== userId.toString()) {
+        console.error(`Delete candidate failed auth: ownerId (${ownerId}, ${typeof ownerId}) !== userId (${userId}, ${typeof userId})`);
+        return res.status(403).json({
+          success: false,
+          message: "Access denied: you do not own this candidate",
+        });
+      }
+
+      await storage.deleteCandidate(req.params.id);
+      res.json({
+        success: true,
+        message: "Candidate deleted successfully",
+      });
+    } catch (error) {
+      console.error("Error deleting candidate:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error deleting candidate",
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
+

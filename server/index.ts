@@ -4,7 +4,9 @@ import { setupVite, serveStatic, log } from "./vite";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 import { setupDatabase, validateDatabase } from "./db-setup";
+import { setupSecurity } from "./security";
 import dotenv from "dotenv";
+import cookieParser from "cookie-parser";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 
@@ -12,9 +14,24 @@ import { dirname, resolve } from "path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, "../.env") });
 
+// ─── Validate Required Secrets in Production ──────────────────────────────────
+if (process.env.NODE_ENV === "production") {
+  const required = ["JWT_SECRET", "SESSION_SECRET"];
+  for (const key of required) {
+    if (!process.env[key]) {
+      console.error(`FATAL: ${key} must be set in production`);
+      process.exit(1);
+    }
+  }
+}
+
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+
+// Security middleware (Helmet, CORS, rate limiting, CSRF) — must be before routes
+setupSecurity(app);
 
 app.use((req, res, next) => {
   const start = Date.now();

@@ -9,13 +9,18 @@ export default function AuthMinimal() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [role, setRole] = useState<'candidate' | 'recruiter'>('candidate');
   
   const { user, loginMutation, registerMutation } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
     if (user) {
-      setLocation("/subscription");
+      if (user.role === 'recruiter') {
+        setLocation("/candidates"); // Recruiters go to CV parser
+      } else {
+        setLocation("/profile"); // Candidates go to profile builder
+      }
     }
   }, [user, setLocation]);
 
@@ -25,9 +30,9 @@ export default function AuthMinimal() {
       username: email,
       password: password,
     }, {
-      onSuccess: () => {
+      onSuccess: (data) => {
         // Force a page reload to ensure session is recognized
-        window.location.href = "/subscription";
+        window.location.href = data.role === 'recruiter' ? "/candidates" : "/profile";
       }
     });
   };
@@ -42,10 +47,11 @@ export default function AuthMinimal() {
       email: email,
       username: username,
       password: password,
+      role: role,
     }, {
-      onSuccess: () => {
+      onSuccess: (data) => {
         // Force a page reload to ensure session is recognized
-        window.location.href = "/subscription";
+        window.location.href = data.role === 'recruiter' ? "/candidates" : "/profile";
       }
     });
   };
@@ -63,6 +69,21 @@ export default function AuthMinimal() {
     userSelect: 'auto',
     zIndex: 999999,
     position: 'relative'
+  };
+
+  const radioContainerStyle: React.CSSProperties = {
+    display: 'flex',
+    gap: '16px',
+    marginBottom: '16px',
+    justifyContent: 'center'
+  };
+
+  const radioLabelStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    cursor: 'pointer',
+    color: '#333'
   };
 
   return (
@@ -87,6 +108,31 @@ export default function AuthMinimal() {
         </h1>
 
         <form onSubmit={isLogin ? handleLogin : handleRegister}>
+          {!isLogin && (
+            <div style={radioContainerStyle}>
+              <label style={radioLabelStyle}>
+                <input
+                  type="radio"
+                  name="role"
+                  value="candidate"
+                  checked={role === 'candidate'}
+                  onChange={() => setRole('candidate')}
+                />
+                Candidate
+              </label>
+              <label style={radioLabelStyle}>
+                <input
+                  type="radio"
+                  name="role"
+                  value="recruiter"
+                  checked={role === 'recruiter'}
+                  onChange={() => setRole('recruiter')}
+                />
+                Recruiter
+              </label>
+            </div>
+          )}
+
           <input
             type="email"
             placeholder="Email"
@@ -168,6 +214,7 @@ export default function AuthMinimal() {
           <p>Email: {email}</p>
           <p>Username: {username}</p>
           <p>Password: {"*".repeat(password.length)}</p>
+          <p>Role: {role}</p>
           <p>Login pending: {loginMutation.isPending ? 'yes' : 'no'}</p>
           <p>Register pending: {registerMutation.isPending ? 'yes' : 'no'}</p>
         </div>

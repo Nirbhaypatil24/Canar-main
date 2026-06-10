@@ -10,6 +10,7 @@ interface ProtectedRouteProps {
   component: () => React.JSX.Element | null;
   requireSubscription?: boolean;
   requireCredits?: number;
+  requireRole?: 'candidate' | 'recruiter';
 }
 
 export function ProtectedRoute({
@@ -17,6 +18,7 @@ export function ProtectedRoute({
   component: Component,
   requireSubscription = false,
   requireCredits = 0,
+  requireRole,
 }: ProtectedRouteProps) {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { hasActiveSubscription, creditsRemaining, canEdit } = useSubscription();
@@ -60,6 +62,34 @@ export function ProtectedRoute({
                 className="w-full"
               >
                 Back to Home
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </Route>
+    );
+  }
+
+  // Check role authorization if required
+  if (requireRole && user?.role !== requireRole) {
+    return (
+      <Route path={path}>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <Lock className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <CardTitle>Access Denied</CardTitle>
+              <CardDescription>
+                You do not have permission to access this page. This page requires {requireRole} access.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button
+                variant="outline"
+                onClick={() => setLocation(user?.role === 'recruiter' ? "/candidates" : "/profile")}
+                className="w-full"
+              >
+                Go to Dashboard
               </Button>
             </CardContent>
           </Card>

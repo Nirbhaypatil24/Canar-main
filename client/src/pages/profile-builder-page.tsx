@@ -14,7 +14,7 @@ import { CreditCounter } from "@/components/credit-counter";
 import { AutosaveToast } from "@/components/autosave-toast";
 import { CreditTopupModal } from "@/components/modals/credit-topup-modal";
 import { ShareProfileModal } from "@/components/modals/share-profile-modal";
-import { Plus, Trash2, FileText, Share, Upload, Eye, Edit, GraduationCap, Code, Briefcase, Award, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, FileText, Share, Upload, Eye, Edit, GraduationCap, Code, Briefcase, Award, ArrowLeft, LogOut, Sparkles, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import debounce from "lodash.debounce";
 import { PhotoUpload, CVUpload } from "@/components/file-upload";
@@ -60,7 +60,7 @@ export default function ProfileBuilderPage() {
   const [showCreditModal, setShowCreditModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAutosaveToast, setShowAutosaveToast] = useState(false);
-  const { user } = useAuth();
+  const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
 
   const { data: profile, isLoading } = useQuery<ProfileData>({
@@ -585,12 +585,47 @@ export default function ProfileBuilderPage() {
                 Export PDF
               </Button>
               <Button
+                onClick={() => (window.location.href = "/candidates")}
+                size="sm"
+                className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700"
+              >
+                <Sparkles className="h-4 w-4" />
+                AI CV Parser
+              </Button>
+              {user?.role === 'recruiter' && (
+                <Button
+                  onClick={() => (window.location.href = "/search")}
+                  size="sm"
+                  variant="outline"
+                  className="flex items-center gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                >
+                  <Search className="h-4 w-4" />
+                  AI Search
+                </Button>
+              )}
+              <Button
                 onClick={() => setShowShareModal(true)}
                 size="sm"
                 className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
               >
                 <Share className="h-4 w-4" />
                 Share
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  logoutMutation.mutate(undefined, {
+                    onSuccess: () => {
+                      window.location.href = "/";
+                    }
+                  });
+                }}
+                disabled={logoutMutation.isPending}
+                className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+              >
+                <LogOut className="h-4 w-4" />
+                {logoutMutation.isPending ? "..." : "Logout"}
               </Button>
             </div>
           </div>

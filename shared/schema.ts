@@ -8,6 +8,10 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 255 }).notNull().unique(),
   password: text("password").notNull(),
   username: varchar("username", { length: 100 }),
+  role: varchar("role", { length: 20 }).default("candidate").notNull(), // 'candidate' or 'recruiter'
+  lastLoginAt: timestamp("last_login_at"),
+  failedLoginAttempts: integer("failed_login_attempts").default(0),
+  lockedUntil: timestamp("locked_until"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -81,6 +85,65 @@ export const experiences = pgTable("experiences", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const refreshTokens = pgTable("refresh_tokens", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  revoked: boolean("revoked").default(false),
+  userAgent: text("user_agent"),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const candidates = pgTable("candidates", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+
+  // Core parsed fields
+  fullName: varchar("full_name", { length: 255 }),
+  email: varchar("candidate_email", { length: 255 }),
+  phone: varchar("phone", { length: 50 }),
+  location: varchar("location", { length: 255 }),
+  designation: varchar("designation", { length: 255 }),
+  summary: text("summary"),
+  totalExperienceYears: integer("total_experience_years"),
+
+  // Structured data stored as JSONB
+  skills: jsonb("skills").$type<string[]>(),
+  technologies: jsonb("technologies").$type<string[]>(),
+  experience: jsonb("experience").$type<{
+    role: string;
+    company: string;
+    duration: string;
+    description: string;
+  }[]>(),
+  education: jsonb("candidate_education").$type<{
+    degree: string;
+    institution: string;
+    year: string;
+  }[]>(),
+  projects: jsonb("candidate_projects").$type<{
+    name: string;
+    description: string;
+    technologies: string[];
+  }[]>(),
+  certifications: jsonb("certifications").$type<string[]>(),
+  languages: jsonb("languages").$type<string[]>(),
+
+  // Source tracking
+  cvUrl: text("cv_url"),
+  cvFileName: varchar("cv_file_name", { length: 255 }),
+  source: varchar("source", { length: 50 }).default("cv_upload"), // 'cv_upload' | 'excel_import' | 'manual'
+  rawParsedData: jsonb("raw_parsed_data"),
+
+  // Search optimization
+  searchVector: text("search_vector"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ one, many }) => ({
   subscription: one(subscriptions),
@@ -90,6 +153,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   skills: many(skills),
   experiences: many(experiences),
   creditPurchases: many(creditPurchases),
+  refreshTokens: many(refreshTokens),
+  candidates: many(candidates),
 }));
 
 export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
@@ -118,6 +183,14 @@ export const experiencesRelations = relations(experiences, ({ one }) => ({
 
 export const creditPurchasesRelations = relations(creditPurchases, ({ one }) => ({
   user: one(users, { fields: [creditPurchases.userId], references: [users.id] }),
+}));
+
+export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
+  user: one(users, { fields: [refreshTokens.userId], references: [users.id] }),
+}));
+
+export const candidatesRelations = relations(candidates, ({ one }) => ({
+  user: one(users, { fields: [candidates.userId], references: [users.id] }),
 }));
 
 // Insert schemas
@@ -162,6 +235,17 @@ export const insertCreditPurchaseSchema = createInsertSchema(creditPurchases).om
   purchaseDate: true,
 });
 
+export const insertRefreshTokenSchema = createInsertSchema(refreshTokens).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCandidateSchema = createInsertSchema(candidates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -179,3 +263,7 @@ export type Experience = typeof experiences.$inferSelect;
 export type InsertExperience = z.infer<typeof insertExperienceSchema>;
 export type CreditPurchase = typeof creditPurchases.$inferSelect;
 export type InsertCreditPurchase = z.infer<typeof insertCreditPurchaseSchema>;
+export type RefreshToken = typeof refreshTokens.$inferSelect;
+export type InsertRefreshToken = z.infer<typeof insertRefreshTokenSchema>;
+export type Candidate = typeof candidates.$inferSelect;
+export type InsertCandidate = z.infer<typeof insertCandidateSchema>;
